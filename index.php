@@ -22,7 +22,8 @@ if ($method === 'POST' && $path === '/index.php/user/register') {
     $mysql = new mysqli("localhost", "root", "", "testdb");
     if ($mysql->connect_error) {
         echo json_encode('Error Number: ' . $mysql->connect_errno);
-        echo json_encode('Error Description: ' . $mysql->connect_error);
+        // echo json_encode('Error Description: ' . $mysql->connect_error);
+        exit;
     } else {
 
         $acceptRules = 0;
@@ -38,16 +39,17 @@ if ($method === 'POST' && $path === '/index.php/user/register') {
         '" . $requestData['age'] . "', '" . $requestData['gender'] . "', '" . $acceptRules . "')";
 
         $result_query = $mysql->query($sql_query);
-        if ($result_query) {
-        } else {
-            // Если возникла ошибка при выполнении запроса
-            echo json_encode("Ошибка выполнения запроса: " . $mysql->error);
+        if (!$result_query) { // Если возникла ошибка при выполнении запроса
+            // ЖЕЛАТЕЛЬНО И ПРАВИЛЬНЕЕ ПОНИМАТЬ, ЧТО ОШИБКА ИЗ-ЗА ТОГО, ЧТО ЛОГИН УЖЕ СУЩЕСТВУЕТ, а то тут любая ошибка это код 403, а это типо из-за существующего логина
+            // echo json_encode("Ошибка выполнения запроса: " . $mysql->error);
+            http_response_code(403);
+            exit;
         }
     }
 
     $mysql->close();
     // отправляем в тело http ответа ассоциативный массив, преобразованный в json строку
-    echo json_encode(array("успешно" => "yes of course"));
+    echo json_encode("Successful");
     exit;
 }
 
