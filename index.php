@@ -3,15 +3,103 @@
 // Устанавливаем заголовки для разрешения CORS
 header("Access-Control-Allow-Origin: *");
 
+if (!empty($_SERVER['QUERY_STRING'])) { // проверяем наличие query string
+    $username = $_GET['username'];
+
+    $mysql = new mysqli("localhost", "root", "", "testdb");
+    if ($mysql->connect_error) {
+        echo json_encode('Error Number: ' . $mysql->connect_errno);
+        exit;
+    } else {
+        $sql_query = "SELECT * FROM Users WHERE Login = '$username' ";
+        $result_query = $mysql->query($sql_query);
+        if ($result_query) {
+            $row = $result_query->fetch_assoc();
+            echo json_encode($row, JSON_UNESCAPED_UNICODE);
+            exit;
+        } else {
+            echo json_encode("Error: ", $mysql->error);
+            exit;
+        }
+    }
+}
+
 // Определение маршрутов
 $method = $_SERVER['REQUEST_METHOD'];
-$requestUri = $_SERVER['REQUEST_URI'];
+$requestUri = $_SERVER['REQUEST_URI']; // сами endpoints
 
-// Разбиваем URI на отдельные части
-$parsedUri = parse_url($requestUri);
-$path = $parsedUri['path'];
+if ($method === 'GET' && $requestUri === '/index.php/users') {
+    $mysql = new mysqli("localhost", "root", "", "testdb");
+    if ($mysql->connect_error) {
+        echo json_encode('Error Number: ' . $mysql->connect_errno);
+        exit;
+    } else {
+        $sql_query = "SELECT LastName FROM Users";
+        $result_query = $mysql->query($sql_query);
+        if ($result_query) {
+            $html_table = '<table>';
 
-if ($method === 'POST' && $path === '/index.php/user/register') {
+            while ($row = $result_query->fetch_assoc()) {
+                $html_table .= '<tr><td>' . $row['LastName'] . '</td></tr>';
+            }
+            $html_table .= '</table>';
+            echo $html_table;
+            exit;
+        } else {
+            echo json_encode("Error: ", $mysql->error);
+            exit;
+        }
+    }
+}
+
+if ($method === 'GET' && $requestUri === '/index.php/users/statistics') {
+    $mysql = new mysqli("localhost", "root", "", "testdb");
+    if ($mysql->connect_error) {
+        echo json_encode('Error Number: ' . $mysql->connect_errno);
+        exit;
+    } else {
+        $resultHtml = '';
+
+        $sql_query = 'SELECT COUNT(*) FROM Users'; // количество записей в таблице
+        $result_query = $mysql->query($sql_query);
+        if ($result_query) {
+            $row = $result_query->fetch_assoc();
+            $resultHtml .= '<div> Количество записей в таблице: ' . $row['COUNT(*)'] . '</div>';
+        } else {
+            echo json_encode("Error: ", $mysql->error);
+            exit;
+        }
+
+        $date_array = getdate();
+        $begin_date = date("Y-m-d", mktime(0, 0, 0, $date_array['mon'], 1, $date_array['year']));
+        $end_date = date("Y-m-d", mktime(0, 0, 0, $date_array['mon'] + 1, 0, $date_array['year']));
+        $sql_query = "SELECT COUNT(*) FROM Users WHERE Created >= '$begin_date' AND Created <= '$end_date'"; // количество записей в таблице за последний месяц
+        $result_query = $mysql->query($sql_query);
+        if ($result_query) {
+            $row = $result_query->fetch_assoc();
+            $resultHtml .= '<div> Количество созданных записей за последний месяц: ' . $row['COUNT(*)'] . '</div>';
+        } else {
+            echo json_encode("Error: ", $mysql->error);
+            exit;
+        }
+
+        $sql_query = 'SELECT * FROM Users ORDER BY Created DESC LIMIT 0,1'; // последняя созданная запись
+        $result_query = $mysql->query($sql_query);
+        if ($result_query) {
+            $row = $result_query->fetch_assoc();
+            $resultHtml .= '<div> Последняя созданная запись: ' . $row['Login'] . ' ' . $row['FirstName'] . ' ' . $row['LastName'] . '</div>';
+        } else {
+            echo json_encode("Error: ", $mysql->error);
+            exit;
+        }
+
+
+        echo $resultHtml;
+        exit;
+    }
+}
+
+if ($method === 'POST' && $requestUri === '/index.php/user/register') {
 
     // Получаем тело HTTP-запроса, сразу json строка
     $requestBody = file_get_contents('php://input');
@@ -26,6 +114,15 @@ if ($method === 'POST' && $path === '/index.php/user/register') {
         exit;
     } else {
 
+        // сначала проверяем существование самого логина
+        $sql_query = "SELECT COUNT(*) AS count FROM Users WHERE Login = '" . $requestData['login'] . "'";
+        $result_query = $mysql->query($sql_query);
+        $row = $result_query->fetch_assoc();
+        if ($row['count'] > 0) { // такой логин уже существует
+            http_response_code(403);
+            exit;
+        }
+
         $acceptRules = 0;
         if ($requestData['acceptRules'] === true) {
             $acceptRules = 1;
@@ -34,15 +131,14 @@ if ($method === 'POST' && $path === '/index.php/user/register') {
         // хешируем пароль
         $hashedPassword = password_hash($requestData['password'], PASSWORD_BCRYPT);
 
+        // добавляем запись в таблицу
         $sql_query = "INSERT INTO Users (FirstName, LastName, Email, Login, Password, AgeLimit, Gender, AcceptRules) 
         VALUES ('" . $requestData['firstName'] . "', '" . $requestData['lastName'] . "', '" . $requestData['email'] . "', '" . $requestData['login'] . "', '" . $hashedPassword . "', 
         '" . $requestData['age'] . "', '" . $requestData['gender'] . "', '" . $acceptRules . "')";
 
         $result_query = $mysql->query($sql_query);
         if (!$result_query) { // Если возникла ошибка при выполнении запроса
-            // ЖЕЛАТЕЛЬНО И ПРАВИЛЬНЕЕ ПОНИМАТЬ, ЧТО ОШИБКА ИЗ-ЗА ТОГО, ЧТО ЛОГИН УЖЕ СУЩЕСТВУЕТ, а то тут любая ошибка это код 403, а это типо из-за существующего логина
-            // echo json_encode("Ошибка выполнения запроса: " . $mysql->error);
-            http_response_code(403);
+            echo json_encode("Ошибка выполнения запроса: " . $mysql->error);
             exit;
         }
     }
@@ -53,7 +149,7 @@ if ($method === 'POST' && $path === '/index.php/user/register') {
     exit;
 }
 
-if ($method === 'POST' && $path === '/index.php/user/auth') {
+if ($method === 'POST' && $requestUri === '/index.php/user/auth') {
     // отправить три http ответа: если все отлично / если логин неправилен / если пароль неправилен
 
     // Получаем тело HTTP-запроса, сразу json строка
