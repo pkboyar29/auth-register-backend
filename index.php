@@ -28,39 +28,34 @@ if (!empty($_SERVER['QUERY_STRING'])) { // проверяем наличие que
 $method = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI']; // сами endpoints
 
-// if ($method === 'POST' && $requestUri === '/index.php/token') {
-//     $secretKey = "6LdxW4gpAAAAAADaJUivpSImYHE2gfcPJWPlR7MI"; // секретный ключ reCAPTCHA
-//     $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify'; // URL для проверки токена reCAPTCHA
-//     $token = file_get_contents('php://input'); // Получаем тело HTTP-запроса, сразу json строка
 
-//     // Данные для отправки на сервер reCAPTCHA для проверки
-//     $data = array(
-//         'secret' => $secretKey,
-//         'response' => $token
-//     );
+if ($method === 'POST' && $requestUri === '/index.php/token') {
+    $secretKey = "6LdxW4gpAAAAAADaJUivpSImYHE2gfcPJWPlR7MI";
+    $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+    $token = json_decode(file_get_contents('php://input')); // Получаем тело HTTP-запроса, сразу json строка
 
-//     $options = array(
-//         'http' => array(
-//             'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
-//             'method'  => 'POST',
-//             'content' => http_build_query($data)
-//         )
-//     );
+    $data = [
+        'secret' => $secretKey,
+        'response' => $token    
+    ];
 
-//     $context  = stream_context_create($options);
-//     $response = file_get_contents($verifyUrl, false, $context);
-//     $result = json_decode($response); // не может преобразовать в json, да и вообще зачем это делать
+    $curl = curl_init();
+    curl_setopt($curl, CURLOPT_URL, $verifyUrl);
+    curl_setopt($curl, CURLOPT_POST, true);
+    curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($data));
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    $result = json_decode(curl_exec($curl));
 
-//     if ($result->success) {
-//         http_response_code(200);
-//         echo 'Токен действителен';
-//         exit;
-//     } else {
-//         http_response_code(400);
-//         echo 'Токен недействителен';
-//         exit;
-//     }
-// }
+    if ($result->success) {
+        http_response_code(200);
+        echo 'Токен действителен';
+        exit;
+    } else {
+        http_response_code(400);
+        echo 'Токен недействителен';
+        exit;
+    }
+}
 
 if ($method === 'GET' && $requestUri === '/index.php/users') {
     $mysql = new mysqli("localhost", "root", "", "testdb");
